@@ -1,7 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright
 import sys
-from datetime import datetime  # <-- ΝΕΟ: Εισαγωγή βιβλιοθήκης ημερομηνίας
+from datetime import datetime
 
 URL = "https://www.meteo.gr/thunders.cfm"
 
@@ -19,19 +19,33 @@ async def capture_map():
             print("Μετάβαση στη σελίδα...")
             await page.goto(URL, wait_until="domcontentloaded", timeout=180000)
 
-            print("Έλεγχος για popup cookies...")
-            await page.wait_for_timeout(5000) 
-            
+            print("Αναμονή 15 δευτερολέπτων για εμφάνιση popup cookies...")
+            await page.wait_for_timeout(15000) 
+
+            # --- ΝΕΟ: Προσπάθεια κλεισίματος ή απόκρυψης του popup ---
             try:
-                confirm_button = page.locator("button:has-text('CONFIRM'), a:has-text('CONFIRM'), text='CONFIRM'").first
+                # Ψάχνουμε το κουμπί CONFIRM
+                confirm_button = page.locator("button", has_text="CONFIRM").first
                 if await confirm_button.is_visible():
                     await confirm_button.click()
-                    print("Το popup των cookies έκλεισε επιτυχώς.")
-                    await page.wait_for_timeout(2000) 
+                    print("Το popup των cookies έκλεισε με επιτυχία.")
+                    await page.wait_for_timeout(3000) 
                 else:
-                    print("Δεν βρέθηκε popup cookies. Συνεχίζουμε...")
+                    raise Exception("Το κουμπί δεν είναι ορατό")
             except Exception as e:
-                print(f"Αποτυχία κλεισίματος cookies (ίσως να μην υπάρχει popup): {e}")
+                print(f"Αποτυχία κλεισίματος με κλικ: {e}")
+                print("Προσπάθεια απόκρυψης του popup με CSS...")
+                # Κρύβουμε τα γνωστά popup συγκατάθεσης
+                await page.add_style_tag(content="""
+                    .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
+                    .qc-cmp2-container, #qc-cmp2-container, 
+                    .cmp-container, #cmp-container, 
+                    div[style*='z-index: 999'], div[style*='z-index:9999'],
+                    div[style*='position: fixed'][style*='top: 0']
+                    { display: none !important; visibility: hidden !important; }
+                """)
+                print("Έγινε προσπάθεια απόκρυψης του popup.")
+            # --------------------------------------------------------
 
             print("Αναμονή για το πλαίσιο του χάρτη...")
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
@@ -40,10 +54,8 @@ async def capture_map():
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων...")
             await page.wait_for_timeout(60000)
 
-            # --- ΝΕΟ: Δημιουργία ονόματος αρχείου με ημερομηνία και ώρα ---
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
             filename = f"screenshot_{timestamp}.png"
-            # -------------------------------------------------------------
 
             print(f"Λήψη στιγμιότυπου ως {filename}...")
             await map_container.screenshot(path=filename)
