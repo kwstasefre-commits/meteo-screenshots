@@ -2,9 +2,56 @@ import asyncio
 from playwright.async_api import async_playwright
 import sys
 from datetime import datetime
-from zoneinfo import ZoneInfo  # <-- ΝΕΟ: Εισαγωγή βιβλιοθήκης ζώνης ώρας
+from zoneinfo import ZoneInfo
 
 URL = "https://www.meteo.gr/thunders.cfm"
+
+async def dismiss_popups(page):
+    """Προσπαθεί να κλείσει όλα τα popups που εμφανίζονται."""
+    print("Έλεγχος και κλείσιμο popups...")
+    # Λίστα με πιθανά κείμενα κουμπιών για κλείσιμο popup
+    buttons = ["CONFIRM", "OK", "ΟΚ", "Close", "Κλείσιμο", "Accept", "Αποδοχή", "Συνέχεια"]
+    
+    # Προσπαθούμε να κλείσουμε popups σε ένα loop (μπορεί να εμφανιστούν πολλά διαδοχικά)
+    for i in range(5):
+        closed = False
+        for text in buttons:
+            try:
+                # Ψάχνουμε σε buttons, a, divs με role=button
+                btn = page.locator(f"button:has-text('{text}'), a:has-text('{text}'), div[role='button']:has-text('{text}')").first
+                if await btn.is_visible():
+                    await btn.click()
+                    print(f"  -> Έκλεισε popup με κουμπί: '{text}'")
+                    await page.wait_for_timeout(2000) # Περιμένουμε να δράσει το κλικ
+                    closed = True
+                    break # Ξαναρχίζουμε το loop γιατί μπορεί να εμφανιστεί άλλο popup
+            except:
+                continue
+        if not closed:
+            break # Αν δεν κλείσαμε τίποτα σε αυτόν τον κύκλο, σταματάμε
+    
+    print("Έλεγχος για υπολειπόμενα overlays...")
+    # Κρύβουμε οποιοδήποτε στοιχείο έχει υψηλό z-index και είναι fixed (εκτός αν είναι ο χάρτης)
+    await page.add_style_tag(content="""
+        /* Στοχεύουμε popups, overlays, διαφημίσεις και consent screens */
+        .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
+        .qc-cmp2-container, #qc-cmp2-container, 
+        .cmp-container, #cmp-container, 
+        div[class*='ad-'], div[id*='ad-'], div[class*='banner'], div[id*='banner'],
+        [role='dialog'], [role='alertdialog'],
+        div[class*='modal'], div[id*='modal'],
+        div[class*='overlay'], div[id*='overlay'],
+        div[style*='position: fixed'][style*='z-index: 999'],
+        div[style*='position: fixed'][style*='z-index: 9999'],
+        div[style*='position: fixed'][style*='z-index: 10000'],
+        div[style*='position: fixed'][style*='z-index: 99999']
+        { 
+            display: none !important; 
+            visibility: hidden !important; 
+            opacity: 0 !important;
+        }
+    """)
+    print("Έγινε απόκρυψη πιθανών overlays με CSS.")
 
 async def capture_map():
     async with async_playwright() as p:
@@ -20,44 +67,11 @@ async def capture_map():
             print("Μετάβαση στη σελίδα...")
             await page.goto(URL, wait_until="domcontentloaded", timeout=180000)
 
-            print("Αναμονή 15 δευτερολέπτων για εμφάνιση popup cookies...")
+            print("Αναμονή 15 δευτερολέπτων για αρχικό φόρτωμα...")
             await page.wait_for_timeout(15000) 
 
-            # --- Κλείσιμο Cookies ---
-            try:
-                confirm_button = page.locator("button", has_text="CONFIRM").first
-                if await confirm_button.is_visible():
-                    await confirm_button.click()
-                    print("Το popup των cookies έκλεισε με επιτυχία.")
-                    await page.wait_for_timeout(5000)
-                else:
-                    raise Exception("Το κουμπί δεν είναι ορατό")
-            except Exception as e:
-                print(f"Αποτυχία κλεισίματος cookies: {e}")
-
-            # --- Κλείσιμο Διαφήμισης ---
-            print("Έλεγχος για διαφημίσεις...")
-            try:
-                close_ad_button = page.locator("button:has-text('Κλείσιμο'), button:has-text('Close'), text='Κλείσιμο', text='Close', [aria-label='Close'], .close-ad, .ad-close").first
-                
-                if await close_ad_button.is_visible():
-                    await close_ad_button.click()
-                    print("Η διαφήμιση έκλεισε επιτυχώς.")
-                    await page.wait_for_timeout(2000)
-                else:
-                    print("Δεν βρέθηκε κουμπί κλεισίματος διαφήμισης. Προσπάθεια απόκρυψης...")
-                    await page.add_style_tag(content="""
-                        .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
-                        .qc-cmp2-container, #qc-cmp2-container, 
-                        .cmp-container, #cmp-container, 
-                        div[class*='ad-'], div[id*='ad-'], div[class*='banner'], div[id*='banner'],
-                        div[style*='z-index: 999'], div[style*='z-index:9999'],
-                        div[style*='position: fixed'][style*='top: 0']
-                        { display: none !important; visibility: hidden !important; }
-                    """)
-                    print("Έγινε προσπάθεια απόκρυψης της διαφήμισης με CSS.")
-            except Exception as e:
-                print(f"Αποτυχία κλεισίματος διαφήμισης: {e}")
+            # Κλήση της συνάρτησης για κλείσιμο popups
+            await dismiss_popups(page)
 
             print("Αναμονή για το πλαίσιο του χάρτη...")
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
@@ -66,10 +80,11 @@ async def capture_map():
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
 
-            # --- ΝΕΟ: Χρήση ζώνης ώρας Ελλάδας για το όνομα αρχείου ---
+            # Τελικός έλεγχος για popups που μπορεί να εμφανίστηκαν όσο περιμέναμε
+            await dismiss_popups(page)
+
             timestamp = datetime.now(ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d_%H-%M")
             filename = f"screenshot_{timestamp}.png"
-            # ----------------------------------------------------------
 
             print(f"Λήψη στιγμιότυπου ως {filename}...")
             await map_container.screenshot(path=filename)
