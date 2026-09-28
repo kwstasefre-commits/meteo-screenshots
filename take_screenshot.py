@@ -1,6 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright
 import sys
+from datetime import datetime  # <-- ΝΕΟ: Εισαγωγή βιβλιοθήκης ημερομηνίας
 
 URL = "https://www.meteo.gr/thunders.cfm"
 
@@ -18,25 +19,19 @@ async def capture_map():
             print("Μετάβαση στη σελίδα...")
             await page.goto(URL, wait_until="domcontentloaded", timeout=180000)
 
-            # --- ΝΕΟ: Προσπάθεια κλεισίματος του popup των cookies ---
             print("Έλεγχος για popup cookies...")
-            # Περιμένουμε 5 δευτερόλεπτα μήπως εμφανιστεί το popup
             await page.wait_for_timeout(5000) 
             
             try:
-                # Ψάχνουμε το κουμπί με το κείμενο "CONFIRM"
                 confirm_button = page.locator("button:has-text('CONFIRM'), a:has-text('CONFIRM'), text='CONFIRM'").first
-                
                 if await confirm_button.is_visible():
                     await confirm_button.click()
                     print("Το popup των cookies έκλεισε επιτυχώς.")
-                    # Περιμένουμε λίγο να εξαφανιστεί το popup από την οθόνη
                     await page.wait_for_timeout(2000) 
                 else:
                     print("Δεν βρέθηκε popup cookies. Συνεχίζουμε...")
             except Exception as e:
                 print(f"Αποτυχία κλεισίματος cookies (ίσως να μην υπάρχει popup): {e}")
-            # --------------------------------------------------------
 
             print("Αναμονή για το πλαίσιο του χάρτη...")
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
@@ -45,9 +40,14 @@ async def capture_map():
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων...")
             await page.wait_for_timeout(60000)
 
-            print("Λήψη στιγμιότυπου...")
-            await map_container.screenshot(path="screenshot.png")
-            print("Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως screenshot.png")
+            # --- ΝΕΟ: Δημιουργία ονόματος αρχείου με ημερομηνία και ώρα ---
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            filename = f"screenshot_{timestamp}.png"
+            # -------------------------------------------------------------
+
+            print(f"Λήψη στιγμιότυπου ως {filename}...")
+            await map_container.screenshot(path=filename)
+            print(f"Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως {filename}")
 
         except Exception as e:
             print(f"Σφάλμα: {e}")
