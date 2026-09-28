@@ -35,8 +35,8 @@ jobs:
           name: meteo-screenshot
           path: screenshot.png
           retention-days: 90
-
-           - name: Commit και push του στιγμιότυπου στο repository
+          
+      - name: Commit και push του στιγμιότυπου στο repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
