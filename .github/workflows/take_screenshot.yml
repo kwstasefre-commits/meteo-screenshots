@@ -36,10 +36,15 @@ jobs:
           path: screenshot.png
           retention-days: 90
 
-      - name: Commit και push του στιγμιότυπου στο repository
+           - name: Commit και push του στιγμιότυπου στο repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add screenshot.png
-          git commit -m "Αυτόματο στιγμιότυπο χάρτη κεραυνών $(date +'%Y-%m-%d %H:%M')" || echo "Δεν υπάρχουν αλλαγές"
-          git push
+          if [ -f screenshot.png ]; then
+            git add screenshot.png
+            git commit -m "Αυτόματο στιγμιότυπο χάρτη κεραυνών $(date +'%Y-%m-%d %H:%M')" || echo "Δεν υπάρχουν αλλαγές"
+            git push
+          else
+            echo "Σφάλμα: Το αρχείο screenshot.png δεν δημιουργήθηκε!"
+            exit 1
+          fi
