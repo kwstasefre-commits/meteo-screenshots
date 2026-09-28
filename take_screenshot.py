@@ -41,7 +41,6 @@ async def capture_map():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
-        # Θέτουμε μεγάλο viewport για να έχουμε χώρο
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={'width': 1920, 'height': 1080} 
@@ -60,12 +59,10 @@ async def capture_map():
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
             await map_container.wait_for(state="visible", timeout=180000)
 
-            # --- ΝΕΟ: Κρύβουμε τα πάντα εκτός από τον χάρτη με CSS ---
+            # --- Εφαρμογή CSS για Full Screen στον χάρτη ---
             print("Εφαρμογή CSS για Full Screen στον χάρτη...")
             await page.add_style_tag(content="""
-                /* Κρύβουμε τα πάντα */
                 body * { visibility: hidden; }
-                /* Κάνουμε τον χάρτη να γεμίσει όλη την οθόνη */
                 .embed-responsive, .embed-responsive * { visibility: visible; }
                 .embed-responsive {
                     position: fixed !important;
@@ -81,41 +78,62 @@ async def capture_map():
                     height: 100% !important;
                 }
             """)
-            await page.wait_for_timeout(3000) # Περιμένουμε να εφαρμοστεί το CSS
-            # ---------------------------------------------------------
+            await page.wait_for_timeout(3000) 
 
             # Χρήση του frame_locator για να μπούμε μέσα στο iframe του χάρτη
             frame = page.frame_locator("iframe[src*='stratus.meteo.noa.gr']")
 
-            # --- 1. Ζουμ In ---
-            print("Ζουμ in (8 κλικ)...")
-            zoom_in_btn = frame.locator(".leaflet-control-zoom-in").first
-            if await zoom_in_btn.count() > 0:
-                for _ in range(8): 
-                    await zoom_in_btn.click()
-                    await page.wait_for_timeout(2000) 
-            else:
-                print("  -> Δεν βρέθηκε κουμπί ζουμ.")
-
-            # --- 2. Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα ---
-            print("Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα...")
-            # Παίρνουμε τις διαστάσεις του νέου full screen χάρτη
-            box = await map_container.bounding_box()
+            # --- ΝΕΟ: Κέντραρισμα στην Καρδίτσα με JavaScript ---
+            print("Κέντραρισμα του χάρτη στην Καρδίτσα με JavaScript...")
             
-            if box:
-                start_x = box['x'] + (box['width'] / 2)
-                start_y = box['y'] + (box['height'] / 2)
-                
-                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα στο κέντρο
-                await page.mouse.move(start_x, start_y)
-                await page.mouse.down()
-                # Μετακινούμε τον χάρτη δεξιά (+300) και κάτω (+150)
-                await page.mouse.move(start_x + 300, start_y + 150, steps=20) 
-                await page.mouse.up()
-                print("  -> Ο χάρτης μετακινήθηκε.")
-                await page.wait_for_timeout(5000) 
-
-            # --- Τέλος Μετακίνησης ---
+            # Συντεταγμένες Καρδίτσας: 39.3644, 21.9219
+            # Zoom level: 10 (προσαρμόζεται ανάλογα με το πόσο θέλεις να ζουμάρει)
+            result = await frame.locator("body").evaluate("""
+                () => {
+                    const lat = 39.3644;
+                    const lng = 21.9219;
+                    const zoom = 10;
+                    
+                    // Βρίσκουμε το container του χάρτη
+                    const container = document.querySelector('.leaflet-container');
+                    if (!container) return 'no_container';
+                    
+                    // Ψάχνουμε το αντικείμενο του χάρτη σε όλα τα window properties
+                    for (let key in window) {
+                        try {
+                            const obj = window[key];
+                            if (obj && obj._container === container && typeof obj.setView === 'function') {
+                                obj.setView([lat, lng], zoom);
+                                return 'success: ' + key;
+                            }
+                        } catch(e) {}
+                    }
+                    
+                    // Εναλλακτικά, ψάχνουμε για οποιοδήποτε αντικείμενο με setView
+                    for (let key in window) {
+                        try {
+                            const obj = window[key];
+                            if (obj && typeof obj.setView === 'function' && typeof obj.getZoom === 'function') {
+                                obj.setView([lat, lng], zoom);
+                                return 'success_alt: ' + key;
+                            }
+                        } catch(e) {}
+                    }
+                    
+                    return 'not_found';
+                }
+            """)
+            print(f"Αποτέλεσμα κεντραρίσματος: {result}")
+            
+            if result == 'not_found' or result == 'no_container':
+                print("  -> Αποτυχία κεντραρίσματος με JavaScript. Δοκιμάζουμε εναλλακτική μέθοδο...")
+                # Εναλλακτική: Κλικ στο κουμπί Home για επαναφορά, μετά zoom in
+                home_btn = frame.locator("a.leaflet-control-home, a[title='Home']").first
+                if await home_btn.count() > 0:
+                    await home_btn.click()
+                    await page.wait_for_timeout(3000)
+                    print("  -> Πάτημα Home.")
+            # ---------------------------------------------------
 
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
@@ -128,7 +146,6 @@ async def capture_map():
             filename = f"screenshot_{timestamp}.png"
 
             print(f"Λήψη στιγμιότυπου ως {filename}...")
-            # Παίρνουμε screenshot όλης της σελίδας (που τώρα είναι μόνο ο χάρτης)
             await page.screenshot(path=filename)
             print(f"Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως {filename}")
 
