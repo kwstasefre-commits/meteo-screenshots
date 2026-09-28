@@ -7,21 +7,20 @@ URL = "https://www.meteo.gr/thunders.cfm"
 async def capture_map():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        # Ορισμός viewport για σωστή απόδοση του χάρτη
         page = await browser.new_page(viewport={'width': 1280, 'height': 800})
 
         try:
             print("Μετάβαση στη σελίδα...")
-            # Αλλάξαμε το networkidle σε domcontentloaded για να μην κολλάει
             await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
             
             print("Αναμονή για το iframe του χάρτη...")
-            await page.wait_for_selector("iframe[name='frame1']", timeout=30000)
+            # Ψάχνουμε το iframe με βάση το src του (πιο ασφαλές από το name)
+            await page.wait_for_selector("iframe[src*='stratus.meteo.noa.gr']", timeout=60000)
             
-            map_iframe = page.locator("iframe[name='frame1']").first
+            map_iframe = page.locator("iframe[src*='stratus.meteo.noa.gr']").first
             
-            print("Αναμονή 15 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
-            await page.wait_for_timeout(15000) 
+            print("Αναμονή 30 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
+            await page.wait_for_timeout(30000) 
             
             print("Λήψη στιγμιότυπου...")
             await map_iframe.screenshot(path="screenshot.png")
@@ -29,7 +28,10 @@ async def capture_map():
 
         except Exception as e:
             print(f"Σφάλμα: {e}")
-            sys.exit(1) # Τερματισμός με σφάλμα για να φανεί στο GitHub Actions
+            # Αν αποτύχει, τραβάμε μια φωτογραφία ΟΛΗΣ της σελίδας για να δούμε τι βλέπει ο browser
+            print("Λήψη ολόκληρης της σελίδας για debugging...")
+            await page.screenshot(path="debug_full_page.png")
+            sys.exit(1)
         finally:
             await browser.close()
 
