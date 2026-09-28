@@ -1,0 +1,45 @@
+name: Λήψη Στιγμιότυπου Χάρτη Κεραυνών
+
+on:
+  schedule:
+    # Τρέχει καθημερινά στις 20:56 UTC (23:56 ώρα Ελλάδας, UTC+3)
+    - cron: '56 20 * * *'
+  workflow_dispatch: # Επιτρέπει χειροκίνητη εκτέλεση από την καρτέλα Actions
+
+jobs:
+  take-screenshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Απαραίτητο για να μπορεί να αποθηκεύσει το στιγμιότυπο στο repo
+
+    steps:
+      - name: Λήψη του κώδικα του repository
+        uses: actions/checkout@v4
+
+      - name: Εγκατάσταση Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Εγκατάσταση βιβλιοθηκών
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+
+      - name: Εκτέλεση script λήψης στιγμιότυπου
+        run: python take_screenshot.py
+
+      - name: Αποθήκευση στιγμιότυπου ως artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meteo-screenshot
+          path: screenshot.png
+          retention-days: 90
+
+      - name: Commit και push του στιγμιότυπου στο repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add screenshot.png
+          git commit -m "Αυτόματο στιγμιότυπο χάρτη κεραυνών $(date +'%Y-%m-%d %H:%M')" || echo "Δεν υπάρχουν αλλαγές"
+          git push
