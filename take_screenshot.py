@@ -41,9 +41,10 @@ async def capture_map():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
+        # Αυξάνουμε το viewport για να είναι πιο ευρύχωρο το full screen
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={'width': 1280, 'height': 800}
+            viewport={'width': 1920, 'height': 1080} 
         )
         page = await context.new_page()
 
@@ -59,43 +60,53 @@ async def capture_map():
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
             await map_container.wait_for(state="visible", timeout=180000)
 
-            # --- ΝΕΟ: Ζουμ και Κέντραρισμα στην Καρδίτσα ---
-            print("Προετοιμασία για ζουμ στην Καρδίτσα...")
-            
             # Χρήση του frame_locator για να μπούμε μέσα στο iframe του χάρτη
             frame = page.frame_locator("iframe[src*='stratus.meteo.noa.gr']")
-            
-            # Κλικ στο κουμπί zoom in (+) 4 φορές
-            zoom_in_btn = frame.locator(".leaflet-control-zoom-in")
-            if await zoom_in_btn.count() > 0:
-                print("Ζουμ in (4 κλικ)...")
-                for _ in range(4):
-                    await zoom_in_btn.click()
-                    await page.wait_for_timeout(2000) # Περιμένουμε να φορτώσουν τα πλακίδια του χάρτη
-            else:
-                print("Δεν βρέθηκε το κουμπί ζουμ. Παράλειψη.")
 
-            # Μετακίνηση του χάρτη (σύρσιμο) για να κεντράρουμε στην Καρδίτσα
-            # Επειδή η Καρδίτσα είναι βορειοδυτικά της Αθήνας, σέρνουμε τον χάρτη προς τα δεξιά-κάτω
+            # --- 1. Είσοδος σε Full Screen ---
+            print("Προσπάθεια εισόδου σε Full Screen...")
+            fullscreen_btn = frame.locator("a.leaflet-control-fullscreen-button, a[title='View Fullscreen'], a[title='Full Screen']").first
+            if await fullscreen_btn.count() > 0:
+                await fullscreen_btn.click()
+                print("  -> Πάτημα Full Screen.")
+                await page.wait_for_timeout(5000) 
+            else:
+                print("  -> Δεν βρέθηκε κουμπί Full Screen. Συνεχίζουμε χωρίς αυτό.")
+
+            # --- 2. Ζουμ In ---
+            print("Ζουμ in (8 κλικ)...")
+            zoom_in_btn = frame.locator(".leaflet-control-zoom-in").first
+            if await zoom_in_btn.count() > 0:
+                for _ in range(8): # Αυξήσαμε τα κλικ σε 8 για περισσότερο ζουμ
+                    await zoom_in_btn.click()
+                    await page.wait_for_timeout(2000) 
+            else:
+                print("  -> Δεν βρέθηκε κουμπί ζουμ.")
+
+            # --- 3. Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα ---
             print("Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα...")
             box = await map_container.bounding_box()
+            
             if box:
-                center_x = box['x'] + (box['width'] / 2)
-                center_y = box['y'] + (box['height'] / 2)
+                start_x = box['x'] + (box['width'] / 2)
+                start_y = box['y'] + (box['height'] / 2)
                 
-                # Σύρσιμο από το κέντρο προς τα δεξιά-κάτω (για να πάει ο χάρτης αριστερά-πάνω)
-                await page.mouse.move(center_x, center_y)
+                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα στο κέντρο
+                # Προσαρμόζουμε τις τιμές με βάση την εικόνα σου
+                await page.mouse.move(start_x, start_y)
                 await page.mouse.down()
-                # Προσαρμόζεις τις παρακάτω τιμές αν χρειαστεί (π.χ. +200, +150)
-                await page.mouse.move(center_x + 150, center_y + 100, steps=10)
+                # Μετακινούμε τον χάρτη δεξιά (+200) και κάτω (+100)
+                await page.mouse.move(start_x + 200, start_y + 100, steps=20) 
                 await page.mouse.up()
-                await page.wait_for_timeout(3000) # Περιμένουμε να σταθεροποιηθεί ο χάρτης
-            # ---------------------------------------------
+                print("  -> Ο χάρτης μετακινήθηκε.")
+                await page.wait_for_timeout(5000) 
+
+            # --- Τέλος Μετακίνησης ---
 
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
 
-            # Δεύτερος καθαρισμός (για διαφημίσεις που φόρτωσαν αργότερα)
+            # Δεύτερος καθαρισμός
             await dismiss_popups(page)
             await page.wait_for_timeout(2000)
 
@@ -103,7 +114,8 @@ async def capture_map():
             filename = f"screenshot_{timestamp}.png"
 
             print(f"Λήψη στιγμιότυπου ως {filename}...")
-            await map_container.screenshot(path=filename)
+            # Επειδή είμαστε σε full screen, παίρνουμε screenshot όλης της σελίδας
+            await page.screenshot(path=filename)
             print(f"Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως {filename}")
 
         except Exception as e:
