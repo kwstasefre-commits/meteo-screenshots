@@ -1,7 +1,6 @@
 import asyncio
 from playwright.async_api import async_playwright
 import sys
-import os
 
 URL = "https://www.meteo.gr/thunders.cfm"
 
@@ -9,7 +8,6 @@ async def capture_map():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
-        # Προσθήκη User-Agent για να μην μας μπλοκάρει το site
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={'width': 1280, 'height': 800}
@@ -18,27 +16,41 @@ async def capture_map():
 
         try:
             print("Μετάβαση στη σελίδα...")
-            await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+            await page.goto(URL, wait_until="domcontentloaded", timeout=180000)
 
-            # Απλή αναμονή 20 δευτερολέπτων για να προλάβει να φορτώσει ο χάρτης
-            print("Αναμονή 20 δευτερολέπτων για φόρτωση δεδομένων...")
-            await page.wait_for_timeout(20000)
+            # --- ΝΕΟ: Προσπάθεια κλεισίματος του popup των cookies ---
+            print("Έλεγχος για popup cookies...")
+            # Περιμένουμε 5 δευτερόλεπτα μήπως εμφανιστεί το popup
+            await page.wait_for_timeout(5000) 
+            
+            try:
+                # Ψάχνουμε το κουμπί με το κείμενο "CONFIRM"
+                confirm_button = page.locator("button:has-text('CONFIRM'), a:has-text('CONFIRM'), text='CONFIRM'").first
+                
+                if await confirm_button.is_visible():
+                    await confirm_button.click()
+                    print("Το popup των cookies έκλεισε επιτυχώς.")
+                    # Περιμένουμε λίγο να εξαφανιστεί το popup από την οθόνη
+                    await page.wait_for_timeout(2000) 
+                else:
+                    print("Δεν βρέθηκε popup cookies. Συνεχίζουμε...")
+            except Exception as e:
+                print(f"Αποτυχία κλεισίματος cookies (ίσως να μην υπάρχει popup): {e}")
+            # --------------------------------------------------------
+
+            print("Αναμονή για το πλαίσιο του χάρτη...")
+            map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
+            await map_container.wait_for(state="visible", timeout=180000)
+
+            print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων...")
+            await page.wait_for_timeout(60000)
 
             print("Λήψη στιγμιότυπου...")
-            # Ψάχνουμε το πλαίσιο (div) που περιέχει το iframe, είναι πιο σταθερό
-            map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
-            
-            if await map_container.count() > 0:
-                await map_container.screenshot(path="screenshot.png")
-                print("Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως screenshot.png")
-            else:
-                print("Δεν βρέθηκε το container, λήψη ολόκληρης της σελίδας.")
-                await page.screenshot(path="screenshot.png")
-                print("Αποθηκεύτηκε ολόκληρη η σελίδα ως screenshot.png")
+            await map_container.screenshot(path="screenshot.png")
+            print("Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως screenshot.png")
 
         except Exception as e:
             print(f"Σφάλμα: {e}")
-            # Αν αποτύχει, τραβάμε μια φωτογραφία ΟΛΗΣ της σελίδας για να δούμε τι βλέπει ο browser
             print("Λήψη ολόκληρης της σελίδας για debugging...")
             await page.screenshot(path="debug_full_page.png")
             sys.exit(1)
