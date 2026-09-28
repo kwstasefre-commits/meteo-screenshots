@@ -83,82 +83,36 @@ async def capture_map():
             # Χρήση του frame_locator για να μπούμε μέσα στο iframe του χάρτη
             frame = page.frame_locator("iframe[src*='stratus.meteo.noa.gr']")
 
-            # --- ΝΕΟ: Κέντραρισμα στην Καρδίτσα με πιο επιθετική JavaScript ---
-            print("Κέντραρισμα του χάρτη στην Καρδίτσα...")
+            # --- 1. Ζουμ In (5 κλικ, όπως ζήτησες) ---
+            print("Ζουμ in (5 κλικ)...")
+            zoom_in_btn = frame.locator(".leaflet-control-zoom-in").first
+            if await zoom_in_btn.count() > 0:
+                for i in range(5):
+                    await zoom_in_btn.click()
+                    print(f"  -> Κλικ {i+1} στο ζουμ.")
+                    await page.wait_for_timeout(2500) # Περιμένουμε να φορτώσουν τα πλακίδια
+            else:
+                print("  -> Δεν βρέθηκε κουμπί ζουμ.")
+
+            # --- 2. Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα ---
+            print("Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα...")
+            box = await map_container.bounding_box()
             
-            result = await frame.locator("body").evaluate("""
-                () => {
-                    const lat = 39.3644;
-                    const lng = 21.9219;
-                    const zoom = 11;
-                    
-                    // Μέθοδος 1: Ψάχνουμε στο DOM element
-                    const container = document.querySelector('.leaflet-container');
-                    if (container) {
-                        // Ψάχνουμε για το map instance σε όλα τα properties του container
-                        for (let key in container) {
-                            try {
-                                const obj = container[key];
-                                if (obj && typeof obj.setView === 'function' && typeof obj.getZoom === 'function') {
-                                    obj.setView([lat, lng], zoom);
-                                    return 'success_container_' + key;
-                                }
-                            } catch(e) {}
-                        }
-                    }
-                    
-                    // Μέθοδος 2: Ψάχνουμε στο window για το L global
-                    if (window.L) {
-                        for (let key in window.L) {
-                            try {
-                                const obj = window.L[key];
-                                if (obj && typeof obj.setView === 'function' && typeof obj.getZoom === 'function') {
-                                    obj.setView([lat, lng], zoom);
-                                    return 'success_L_' + key;
-                                }
-                            } catch(e) {}
-                        }
-                    }
-                    
-                    // Μέθοδος 3: Ψάχνουμε σε όλα τα window properties
-                    for (let key in window) {
-                        try {
-                            const obj = window[key];
-                            if (obj && typeof obj.setView === 'function' && typeof obj.getCenter === 'function') {
-                                obj.setView([lat, lng], zoom);
-                                return 'success_window_' + key;
-                            }
-                        } catch(e) {}
-                    }
-                    
-                    // Μέθοδος 4: Ψάχνουμε για το _leaflet_id και μετά για το map
-                    if (container && container._leaflet_id) {
-                        for (let key in window) {
-                            try {
-                                const obj = window[key];
-                                if (obj && obj._container === container) {
-                                    obj.setView([lat, lng], zoom);
-                                    return 'success_leaflet_id';
-                                }
-                            } catch(e) {}
-                        }
-                    }
-                    
-                    return 'not_found';
-                }
-            """)
-            print(f"Αποτέλεσμα κεντραρίσματος: {result}")
-            
-            if result == 'not_found':
-                print("  -> Αποτυχία κεντραρίσματος. Δοκιμάζουμε εναλλακτική μέθοδο με κλικ...")
-                # Εναλλακτική: Κλικ στο κουμπί zoom in πολλές φορές και μετά drag
-                zoom_in_btn = frame.locator(".leaflet-control-zoom-in").first
-                if await zoom_in_btn.count() > 0:
-                    for _ in range(7):
-                        await zoom_in_btn.click()
-                        await page.wait_for_timeout(1500)
-                    print("  -> Έγιναν 7 κλικ στο zoom in.")
-            # ---------------------------------------------------
+            if box:
+                start_x = box['x'] + (box['width'] / 2)
+                start_y = box['y'] + (box['height'] / 2)
+                
+                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα (ΒΔ της Ελλάδας) στο κέντρο
+                # Αν η Καρδίτσα είναι αριστερά, αύξησε το +500. Αν είναι δεξιά, μείωσε το.
+                # Αν η Καρδίτσα είναι πάνω, αύξησε το +400. Αν είναι κάτω, μείωσε το.
+                await page.mouse.move(start_x, start_y)
+                await page.mouse.down()
+                await page.mouse.move(start_x + 500, start_y + 400, steps=20) 
+                await page.mouse.up()
+                print("  -> Ο χάρτης μετακινήθηκε.")
+                await page.wait_for_timeout(5000) 
+
+            # --- Τέλος Μετακίνησης ---
 
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
