@@ -28,26 +28,27 @@ jobs:
 
       - name: Εκτέλεση script λήψης στιγμιότυπου
         run: python take_screenshot.py
-
+        
       - name: Αποθήκευση στιγμιότυπων ως artifact
         uses: actions/upload-artifact@v4
-        if: always() # <--- Αυτό λέει στο GitHub να το κάνει ΠΑΝΤΑ
+        if: always()
         with:
           name: meteo-screenshots
           path: |
-            screenshot.png
+            screenshot_*.png
             debug_full_page.png
           retention-days: 90
-          
+
       - name: Commit και push του στιγμιότυπου στο repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -f screenshot.png ]; then
-            git add screenshot.png
+          # Έλεγχος αν υπάρχει έστω ένα αρχείο screenshot_*.png
+          if ls screenshot_*.png 1> /dev/null 2>&1; then
+            git add screenshot_*.png
             git commit -m "Αυτόματο στιγμιότυπο χάρτη κεραυνών $(date +'%Y-%m-%d %H:%M')" || echo "Δεν υπάρχουν αλλαγές"
             git push
           else
-            echo "Σφάλμα: Το αρχείο screenshot.png δεν δημιουργήθηκε!"
+            echo "Σφάλμα: Δεν βρέθηκε αρχείο screenshot!"
             exit 1
           fi
