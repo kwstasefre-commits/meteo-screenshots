@@ -29,11 +29,14 @@ jobs:
       - name: Εκτέλεση script λήψης στιγμιότυπου
         run: python take_screenshot.py
 
-      - name: Αποθήκευση στιγμιότυπου ως artifact
+      - name: Αποθήκευση στιγμιότυπων ως artifact
         uses: actions/upload-artifact@v4
+        if: always() # <--- Αυτό λέει στο GitHub να το κάνει ΠΑΝΤΑ
         with:
-          name: meteo-screenshot
-          path: screenshot.png
+          name: meteo-screenshots
+          path: |
+            screenshot.png
+            debug_full_page.png
           retention-days: 90
           
       - name: Commit και push του στιγμιότυπου στο repository
