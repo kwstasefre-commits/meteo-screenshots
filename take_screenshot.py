@@ -22,36 +22,49 @@ async def capture_map():
             print("Αναμονή 15 δευτερολέπτων για εμφάνιση popup cookies...")
             await page.wait_for_timeout(15000) 
 
-            # --- ΝΕΟ: Προσπάθεια κλεισίματος ή απόκρυψης του popup ---
+            # --- Κλείσιμο Cookies ---
             try:
-                # Ψάχνουμε το κουμπί CONFIRM
                 confirm_button = page.locator("button", has_text="CONFIRM").first
                 if await confirm_button.is_visible():
                     await confirm_button.click()
                     print("Το popup των cookies έκλεισε με επιτυχία.")
-                    await page.wait_for_timeout(3000) 
+                    await page.wait_for_timeout(5000) # Περιμένουμε να φορτώσει η διαφήμιση
                 else:
                     raise Exception("Το κουμπί δεν είναι ορατό")
             except Exception as e:
-                print(f"Αποτυχία κλεισίματος με κλικ: {e}")
-                print("Προσπάθεια απόκρυψης του popup με CSS...")
-                # Κρύβουμε τα γνωστά popup συγκατάθεσης
-                await page.add_style_tag(content="""
-                    .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
-                    .qc-cmp2-container, #qc-cmp2-container, 
-                    .cmp-container, #cmp-container, 
-                    div[style*='z-index: 999'], div[style*='z-index:9999'],
-                    div[style*='position: fixed'][style*='top: 0']
-                    { display: none !important; visibility: hidden !important; }
-                """)
-                print("Έγινε προσπάθεια απόκρυψης του popup.")
-            # --------------------------------------------------------
+                print(f"Αποτυχία κλεισίματος cookies: {e}")
+
+            # --- ΝΕΟ: Κλείσιμο Διαφήμισης ---
+            print("Έλεγχος για διαφημίσεις...")
+            try:
+                # Ψάχνουμε για το κουμπί "Κλείσιμο" ή "Close" ή το εικονίδιο 'x'
+                close_ad_button = page.locator("button:has-text('Κλείσιμο'), button:has-text('Close'), text='Κλείσιμο', text='Close', [aria-label='Close'], .close-ad, .ad-close").first
+                
+                if await close_ad_button.is_visible():
+                    await close_ad_button.click()
+                    print("Η διαφήμιση έκλεισε επιτυχώς.")
+                    await page.wait_for_timeout(2000)
+                else:
+                    print("Δεν βρέθηκε κουμπί κλεισίματος διαφήμισης. Προσπάθεια απόκρυψης...")
+                    # Κρύβουμε δυναμικά τα γνωστά containers διαφημίσεων
+                    await page.add_style_tag(content="""
+                        .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
+                        .qc-cmp2-container, #qc-cmp2-container, 
+                        .cmp-container, #cmp-container, 
+                        div[class*='ad-'], div[id*='ad-'], div[class*='banner'], div[id*='banner'],
+                        div[style*='z-index: 999'], div[style*='z-index:9999'],
+                        div[style*='position: fixed'][style*='top: 0']
+                        { display: none !important; visibility: hidden !important; }
+                    """)
+                    print("Έγινε προσπάθεια απόκρυψης της διαφήμισης με CSS.")
+            except Exception as e:
+                print(f"Αποτυχία κλεισίματος διαφήμισης: {e}")
 
             print("Αναμονή για το πλαίσιο του χάρτη...")
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
             await map_container.wait_for(state="visible", timeout=180000)
 
-            print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων...")
+            print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
 
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
