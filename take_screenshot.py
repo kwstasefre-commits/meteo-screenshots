@@ -2,6 +2,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo  # <-- ΝΕΟ: Εισαγωγή βιβλιοθήκης ζώνης ώρας
 
 URL = "https://www.meteo.gr/thunders.cfm"
 
@@ -28,16 +29,15 @@ async def capture_map():
                 if await confirm_button.is_visible():
                     await confirm_button.click()
                     print("Το popup των cookies έκλεισε με επιτυχία.")
-                    await page.wait_for_timeout(5000) # Περιμένουμε να φορτώσει η διαφήμιση
+                    await page.wait_for_timeout(5000)
                 else:
                     raise Exception("Το κουμπί δεν είναι ορατό")
             except Exception as e:
                 print(f"Αποτυχία κλεισίματος cookies: {e}")
 
-            # --- ΝΕΟ: Κλείσιμο Διαφήμισης ---
+            # --- Κλείσιμο Διαφήμισης ---
             print("Έλεγχος για διαφημίσεις...")
             try:
-                # Ψάχνουμε για το κουμπί "Κλείσιμο" ή "Close" ή το εικονίδιο 'x'
                 close_ad_button = page.locator("button:has-text('Κλείσιμο'), button:has-text('Close'), text='Κλείσιμο', text='Close', [aria-label='Close'], .close-ad, .ad-close").first
                 
                 if await close_ad_button.is_visible():
@@ -46,7 +46,6 @@ async def capture_map():
                     await page.wait_for_timeout(2000)
                 else:
                     print("Δεν βρέθηκε κουμπί κλεισίματος διαφήμισης. Προσπάθεια απόκρυψης...")
-                    # Κρύβουμε δυναμικά τα γνωστά containers διαφημίσεων
                     await page.add_style_tag(content="""
                         .ic-consent, [id^='ic-consent'], [class^='ic-consent'], 
                         .qc-cmp2-container, #qc-cmp2-container, 
@@ -67,8 +66,10 @@ async def capture_map():
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
 
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            # --- ΝΕΟ: Χρήση ζώνης ώρας Ελλάδας για το όνομα αρχείου ---
+            timestamp = datetime.now(ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d_%H-%M")
             filename = f"screenshot_{timestamp}.png"
+            # ----------------------------------------------------------
 
             print(f"Λήψη στιγμιότυπου ως {filename}...")
             await map_container.screenshot(path=filename)
