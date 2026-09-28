@@ -80,39 +80,38 @@ async def capture_map():
             """)
             await page.wait_for_timeout(3000) 
 
-            # Χρήση του frame_locator για να μπούμε μέσα στο iframe του χάρτη
-            frame = page.frame_locator("iframe[src*='stratus.meteo.noa.gr']")
-
-            # --- 1. Ζουμ In (5 κλικ, όπως ζήτησες) ---
-            print("Ζουμ in (5 κλικ)...")
-            zoom_in_btn = frame.locator(".leaflet-control-zoom-in").first
-            if await zoom_in_btn.count() > 0:
-                for i in range(5):
-                    await zoom_in_btn.click()
-                    print(f"  -> Κλικ {i+1} στο ζουμ.")
-                    await page.wait_for_timeout(2500) # Περιμένουμε να φορτώσουν τα πλακίδια
-            else:
-                print("  -> Δεν βρέθηκε κουμπί ζουμ.")
+            # --- 1. Ζουμ με scroll wheel πάνω στο κέντρο του χάρτη ---
+            print("Ζουμ με scroll wheel...")
+            box = await map_container.bounding_box()
+            if box:
+                center_x = box['x'] + (box['width'] / 2)
+                center_y = box['y'] + (box['height'] / 2)
+                
+                # Τοποθετούμε τον κέρσορα στο κέντρο του χάρτη
+                await page.mouse.move(center_x, center_y)
+                await page.wait_for_timeout(1000)
+                
+                # Κάνουμε scroll up 6 φορές για zoom in
+                for i in range(6):
+                    await page.mouse.wheel(0, -300)
+                    print(f"  -> Scroll {i+1} για zoom in.")
+                    await page.wait_for_timeout(2000) # Περιμένουμε να φορτώσουν τα πλακίδια
+                
+                await page.wait_for_timeout(3000)
 
             # --- 2. Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα ---
             print("Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα...")
-            box = await map_container.bounding_box()
-            
             if box:
                 start_x = box['x'] + (box['width'] / 2)
                 start_y = box['y'] + (box['height'] / 2)
                 
-                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα (ΒΔ της Ελλάδας) στο κέντρο
-                # Αν η Καρδίτσα είναι αριστερά, αύξησε το +500. Αν είναι δεξιά, μείωσε το.
-                # Αν η Καρδίτσα είναι πάνω, αύξησε το +400. Αν είναι κάτω, μείωσε το.
+                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα στο κέντρο
                 await page.mouse.move(start_x, start_y)
                 await page.mouse.down()
-                await page.mouse.move(start_x + 250, start_y + 200, steps=20) 
+                await page.mouse.move(start_x + 150, start_y + 100, steps=20) 
                 await page.mouse.up()
                 print("  -> Ο χάρτης μετακινήθηκε.")
                 await page.wait_for_timeout(5000) 
-
-            # --- Τέλος Μετακίνησης ---
 
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
