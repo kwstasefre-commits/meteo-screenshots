@@ -108,7 +108,7 @@ async def capture_map():
                 # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα στο κέντρο
                 await page.mouse.move(start_x, start_y)
                 await page.mouse.down()
-                await page.mouse.move(start_x + 4000, start_y + 1000, steps=20) 
+                await page.mouse.move(start_x + 3500, start_y + 1000, steps=20) 
                 await page.mouse.up()
                 print("  -> Ο χάρτης μετακινήθηκε.")
                 await page.wait_for_timeout(5000) 
