@@ -2,15 +2,14 @@ name: Λήψη Στιγμιότυπου Χάρτη Κεραυνών
 
 on:
   schedule:
-    # Τρέχει καθημερινά στις 20:56 UTC (23:56 ώρα Ελλάδας, UTC+3)
     - cron: '56 20 * * *'
-  workflow_dispatch: # Επιτρέπει χειροκίνητη εκτέλεση από την καρτέλα Actions
+  workflow_dispatch:
 
 jobs:
   take-screenshot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Απαραίτητο για να μπορεί να αποθηκεύσει το στιγμιότυπο στο repo
+      contents: write
 
     steps:
       - name: Λήψη του κώδικα του repository
@@ -28,7 +27,25 @@ jobs:
 
       - name: Εκτέλεση script λήψης στιγμιότυπου
         run: python take_screenshot.py
-        
+
+      # --- ΝΕΟ ΒΗΜΑ: Αποστολή email με το στιγμιότυπο ---
+      - name: Αποστολή email με το στιγμιότυπο
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Στιγμιότυπο Χάρτη Κεραυνών - $(date +'%Y-%m-%d %H:%M')"
+          to: ${{ secrets.MAIL_TO }}
+          from: "Meteo Bot <${{ secrets.MAIL_USERNAME }}>"
+          body: |
+            Αυτόματο στιγμιότυπο του χάρτη κεραυνών του meteo.gr.
+            Ημερομηνία: $(date +'%Y-%m-%d %H:%M') (ώρα Ελλάδας)
+          attachments: screenshot_*.png
+      # --------------------------------------------------
+
       - name: Αποθήκευση στιγμιότυπων ως artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -43,7 +60,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Έλεγχος αν υπάρχει έστω ένα αρχείο screenshot_*.png
           if ls screenshot_*.png 1> /dev/null 2>&1; then
             git add screenshot_*.png
             git commit -m "Αυτόματο στιγμιότυπο χάρτη κεραυνών $(date +'%Y-%m-%d %H:%M')" || echo "Δεν υπάρχουν αλλαγές"
