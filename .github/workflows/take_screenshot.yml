@@ -26,9 +26,9 @@ jobs:
           playwright install chromium --with-deps
 
       - name: Εκτέλεση script λήψης στιγμιότυπου
+        id: capture
         run: python take_screenshot.py
 
-      # --- ΝΕΟ ΒΗΜΑ: Αποστολή email με το στιγμιότυπο ---
       - name: Αποστολή email με το στιγμιότυπο
         uses: dawidd6/action-send-mail@v4
         with:
@@ -43,8 +43,7 @@ jobs:
           body: |
             Αυτόματο στιγμιότυπο του χάρτη κεραυνών του meteo.gr.
             Ημερομηνία: $(date +'%Y-%m-%d %H:%M') (ώρα Ελλάδας)
-          attachments: screenshot_*.png
-      # --------------------------------------------------
+          attachments: ${{ steps.capture.outputs.filename }}
 
       - name: Αποθήκευση στιγμιότυπων ως artifact
         uses: actions/upload-artifact@v4
