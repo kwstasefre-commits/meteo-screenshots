@@ -44,7 +44,7 @@ async def capture_map():
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={'width': 1920, 'height': 1080},
-            timezone_id="Europe/Athens"  # <-- ΝΕΟ: Ρύθμιση ζώνης ώρας Ελλάδας
+            timezone_id="Europe/Athens"
         )
         page = await context.new_page()
 
@@ -53,14 +53,12 @@ async def capture_map():
             await page.goto(URL, wait_until="domcontentloaded", timeout=180000)
             await page.wait_for_timeout(15000) 
 
-            # Πρώτος καθαρισμός popups
             await dismiss_popups(page)
 
             print("Αναμονή για το πλαίσιο του χάρτη...")
             map_container = page.locator(".embed-responsive.embed-responsive-1by1").first
             await map_container.wait_for(state="visible", timeout=180000)
 
-            # --- Εφαρμογή CSS για Full Screen στον χάρτη ---
             print("Εφαρμογή CSS για Full Screen στον χάρτη...")
             await page.add_style_tag(content="""
                 body * { visibility: hidden; }
@@ -81,32 +79,27 @@ async def capture_map():
             """)
             await page.wait_for_timeout(3000) 
 
-            # --- 1. Ζουμ με scroll wheel πάνω στο κέντρο του χάρτη ---
             print("Ζουμ με scroll wheel...")
             box = await map_container.bounding_box()
             if box:
                 center_x = box['x'] + (box['width'] / 2)
                 center_y = box['y'] + (box['height'] / 2)
                 
-                # Τοποθετούμε τον κέρσορα στο κέντρο του χάρτη
                 await page.mouse.move(center_x, center_y)
                 await page.wait_for_timeout(1000)
                 
-                # Κάνουμε scroll up 6 φορές για zoom in
                 for i in range(6):
                     await page.mouse.wheel(0, -300)
                     print(f"  -> Scroll {i+1} για zoom in.")
-                    await page.wait_for_timeout(2000) # Περιμένουμε να φορτώσουν τα πλακίδια
+                    await page.wait_for_timeout(2000)
                 
                 await page.wait_for_timeout(3000)
 
-            # --- 2. Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα ---
             print("Μετακίνηση του χάρτη για εστίαση στην Καρδίτσα...")
             if box:
                 start_x = box['x'] + (box['width'] / 2)
                 start_y = box['y'] + (box['height'] / 2)
                 
-                # Σύρσιμο προς τα ΔΕΞΙΑ και ΚΑΤΩ για να φέρουμε την Καρδίτσα στο κέντρο
                 await page.mouse.move(start_x, start_y)
                 await page.mouse.down()
                 await page.mouse.move(start_x + 1800, start_y + 1450, steps=20) 
@@ -117,7 +110,6 @@ async def capture_map():
             print("Αναμονή 60 δευτερολέπτων για φόρτωση δεδομένων χάρτη...")
             await page.wait_for_timeout(60000)
 
-            # Δεύτερος καθαρισμός
             await dismiss_popups(page)
             await page.wait_for_timeout(2000)
 
@@ -127,6 +119,11 @@ async def capture_map():
             print(f"Λήψη στιγμιότυπου ως {filename}...")
             await page.screenshot(path=filename)
             print(f"Επιτυχία! Το στιγμιότυπο αποθηκεύτηκε ως {filename}")
+
+            # --- Εξαγωγή του ονόματος αρχείου για χρήση στο workflow ---
+            import os
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write(f"filename={filename}\n")
 
         except Exception as e:
             print(f"Σφάλμα: {e}")
