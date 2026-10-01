@@ -2,7 +2,7 @@ name: Λήψη Στιγμιότυπου Χάρτη Κεραυνών
 
 on:
   schedule:
-    - cron: '56 20 * * *'
+      - cron: '56 18 * * *'
   workflow_dispatch:
 
 jobs:
