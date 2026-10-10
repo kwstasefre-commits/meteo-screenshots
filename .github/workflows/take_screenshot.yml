@@ -1,9 +1,9 @@
 name: Λήψη Στιγμιότυπου Χάρτη Κεραυνών
 
 on:
-  schedule:
-      - cron: '56 18 * * *'
-  workflow_dispatch:
+  # schedule:
+  #   - cron: '56 18 * * *'   # Το απενεργοποιούμε για να μην έχουμε διπλά emails
+  workflow_dispatch:          # ΑΥΤΟ είναι απαραίτητο για το cron-job.org
 
 jobs:
   take-screenshot:
